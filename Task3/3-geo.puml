@@ -1,0 +1,27 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C4 Component: Геомаршрутизация и глобальная балансировка
+
+Person(user, "Пользователь", "Заказывает такси из любого региона")
+
+System_Boundary(dns_layer, "DNS-уровень") {
+    Container(dns_cdn, "DNS и CDN сервис", "Геомаршрутизация\nHealth checking")
+}
+
+System_Boundary(regional_layer, "Региональный уровень") {
+    Container(singapore_alb, "ALB Сингапур", "Application Load Balancer", "Маршрутизация на сервисы\nHealth checks")
+    Container(sydney_alb, "ALB Сидней", "Application Load Balancer", "Резервный регион")
+    Container(saopaulo_alb, "ALB Сан-Паулу", "Application Load Balancer", "Латиноамериканский хаб")
+}
+
+' === Поток запросов ===
+Rel(user, dns_cdn, "DNS запрос", "UDP")
+Rel(dns_cdn, regional_layer, "Направляет к ближайшему")
+
+' === Health checking ===
+Rel(dns_cdn, singapore_alb, "Health check", "HTTP")
+Rel(dns_cdn, sydney_alb, "Health check", "HTTP")
+Rel(dns_cdn, saopaulo_alb, "Health check", "HTTP")
+
+@enduml

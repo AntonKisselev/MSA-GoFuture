@@ -1,0 +1,71 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C4 Component: Data Pipeline для ML и аналитики GoFuture
+
+Person(data_scientist, "Data Scientist", "Разрабатывает ML модели для ценообразования и фрода")
+Person(business_analyst, "Business Analyst", "Анализирует бизнес-метрики и тренды")
+Person(data_engineer, "Data Engineer", "Управляет пайплайнами и качеством данных")
+
+System_Boundary(data_platform, "Data Platform") {    
+    Container(kafka_events, "Kafka Events Bus", "Apache Kafka", "Единый поток событий\nТопики: bookings, drivers, payments")
+    
+    Container(stream, "Потоковые данные", "Flink/KSQL", "Реалтайм обработка\nОбогащение данных\nВалидация")
+    
+    Container(batch, "Batch данные", "Airflow DAGs", "Пакетный сбор данных\nИз внешних источников\nETL процессы")
+    
+    Container(data_processing, "обработка и обогощенние данных")
+    
+    ContainerDb(analytical_db, "Analytical DB", "ClickHouse", "Высокопроизводительные запросы\nАгрегаты и отчеты")
+
+
+    Container(ml_pipeline, "ML Pipeline", "Airflow")
+    Container(ml_engine, "ML модели", "Python")
+
+    
+    Container(api_serving, "Data API Serving", "FastAPI", "REST API для данных\nFeature serving\nMetrics endpoints")
+}
+
+
+System(booking_service, "Сервис бронирования", "События бронирований")
+System(driver_service, "Сервис водителей", "События местоположения")
+System(payment_service, "Сервис платежей", "События платежей")
+System(pricing_service, "Сервис ценообразования", "История цен")
+System(geolocation_service, "Сервис геолокации", "Геоданные и маршруты")
+
+
+System(dynamic_pricing, "Динамическое ценообразование", "ML модель ценообразования")
+System(fraud_detection, "Обнаружение мошенничества", "ML модель фрода")
+System(demand_forecast, "Прогнозирование спроса", "ML модель спроса")
+System(bi_tools, "BI инструменты")
+
+
+System_Ext(traffic_api, "Traffic API", "Данные о трафике")
+
+Rel(booking_service, kafka_events, "Booking events\n• BookingCreated\n• BookingCancelled")
+Rel(driver_service, kafka_events, "Driver events\n• LocationUpdated\n• StatusChanged")
+Rel(payment_service, kafka_events, "Payment events\n• PaymentProcessed\n• PaymentFailed")
+Rel(pricing_service, kafka_events, "Pricing events\n• PriceCalculated\n• SurgeApplied")
+Rel(data_processing, analytical_db, "Запросы за аналитикой и сохранение данных")
+Rel(data_processing, ml_pipeline, "обучение моделей")
+Rel(ml_pipeline, ml_engine, "обновление моделей")
+
+Rel(kafka_events, stream, "Поток событий", "Kafka Consumer")
+Rel(stream, data_processing, "Поток событий")
+Rel(batch, data_processing, "обогощение данных")
+
+Rel(geolocation_service, batch, "Исторические геоданные", "API")
+Rel(traffic_api, batch, "Данные трафика", "REST")
+
+
+Rel(api_serving, bi_tools, "Данные для дашбордов", "REST")
+Rel(analytical_db, bi_tools, "Прямые запросы", "SQL")
+Rel(demand_forecast, ml_engine, "Запрос")
+Rel(dynamic_pricing, ml_engine, "Запрос")
+Rel(fraud_detection, ml_engine, "Запрос")
+
+Rel(data_scientist, ml_pipeline, "Эксперименты с моделями", "UI")
+Rel(business_analyst, bi_tools, "Анализ данных", "UI")
+Rel(data_engineer, batch, "Управление пайплайнами", "UI")
+
+@enduml

@@ -1,0 +1,19 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C4 Component: Глобальная репликация данных GoFuture
+
+System_Boundary(global_infrastructure, "Глобальная инфраструктура") {
+
+    Container(singapore_primary, "Сингапур\n(Основной регион)", "PostgreSQL")
+    Container(sydney_replica, "Сидней\n(Горячий резерв)", "PostgreSQL")
+    Container(sao_paulo_replica, "Сан-Паулу\n(Дополнительная реплика)", "PostgreSQL")
+    Container(moscow_replica, "Москва\n(Аналитическая реплика)", "PostgreSQL")
+
+}
+
+Rel(singapore_primary, sydney_replica, "Синхронная репликация  streaming", "TCP")
+Rel(singapore_primary, sao_paulo_replica, "Асинхронная репликация ETL пачками", "TCP")
+Rel(singapore_primary, moscow_replica, "Асинхронная репликация ETL пачками", "TCP")
+
+@enduml

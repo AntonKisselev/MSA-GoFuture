@@ -1,0 +1,114 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C4 Component: Микросервисная архитектура GoFuture
+
+Person(admin, "Администратор", "Управляет системой и мониторит метрики")
+Person(corporate, "Корпоративный клиент", "Бронирует и управляет поездками через веб-портал")
+Person(passenger, "Пассажир", "Заказывает такси через мобильное приложение")
+Person(driver, "Водитель", "Принимает заказы и выполняет поездки")
+
+System_Boundary(platform, "Платформа GoFuture") {
+
+    Container(gateway, "API Gateway", "Python/FastAPI", "Единая точка входа, маршрутизация, кэширование, ограничение частоты запросов")
+
+    Container(booking, "Сервис бронирования", "Python/FastAPI", "Создание и управление заказами")
+    Container(trip, "Сервис управления поездками", "Python/FastAPI", "Управление жизненным циклом поездки")
+    Container(driver_service, "Сервис водителей", "Python/FastAPI", "Управление профилями и статусами водителей")
+    Container(dispatch, "Сервис диспетчеризации", "Python/FastAPI", "Поиск и назначение ближайших водителей")
+
+    Container(pricing, "Сервис ценообразования", "Python/FastAPI", "Динамическое ценообразование, расчет стоимости")
+    Container(payment, "Сервис платежей", "Python/FastAPI", "Обработка платежей и выплат")
+
+    Container(geolocation, "Сервис геолокации", "Python/FastAPI", "Обработка геоданных, поиск ближайших объектов")
+    Container(routing, "Сервис маршрутизации", "Python/FastAPI", "Построение маршрутов и расчет времени")
+
+    Container(notification, "Сервис уведомлений", "Python/FastAPI", "Отправка push и SMS уведомлений")
+    Container(push_gateway, "Шлюз push-уведомлений", "Python", "Интеграция с FCM, APNS, Huawei Push")
+
+    Container(analytics, "Сервис аналитики", "Python/FastAPI", "Сбор и анализ данных в реальном времени")
+    Container(fraud, "Сервис борьбы с мошенничеством", "Python/FastAPI", "ML-модели для обнаружения фрода")
+
+    Container(iam, "Сервис IAM", "Python/FastAPI", "Аутентификация и авторизация")
+
+    ContainerDb(postgres, "PostgreSQL", "Реляционная БД", "Хранение основных данных сервисов")
+    ContainerDb(redis, "Redis", "Кэш и сессии", "Кэширование, управление сессиями")
+    ContainerDb(elastic, "Elasticsearch", "Поисковый движок", "Геопоиск, полнотекстовый поиск")
+    ContainerDb(clickhouse, "ClickHouse", "Аналитическая БД", "Хранение и анализ больших данных")
+
+    ContainerQueue(kafka, "Apache Kafka", "Шина событий", "Асинхронная коммуникация между сервисами")
+
+    Container(service_mesh, "Service Mesh", "Istio/Linkerd", "Межсервисная коммуникация, observability")
+}
+
+System_Ext(yandex_maps, "Яндекс.Карты", "Картографический сервис")
+System_Ext(payment_gateways, "Платежные шлюзы", "Внешние платежные системы")
+System_Ext(bank_apis, "Банковские API", "API для выплат водителям")
+System_Ext(push_services, "Сервисы push-уведомлений", "FCM, APNS, Huawei Push")
+
+
+System(mobile, "Мобильное приложение", "Swift/Kotlin")
+System(web_portal, "Корпоративный веб-портал", "React/TypeScript")
+System(admin_panel, "Админ панель", "React/TypeScript")
+
+
+Rel(passenger, mobile, "Заказывает поездки")
+Rel(corporate, web_portal, "Управляет корпоративными поездками")
+Rel(admin, admin_panel, "Мониторит и управляет системой")
+Rel(driver, mobile, "Принимает заказы, обновляет статус")
+
+
+Rel(mobile, gateway, "REST API")
+Rel(web_portal, gateway, "REST API")
+Rel(admin_panel, gateway, "REST API")
+
+
+Rel(gateway, iam, "Проверка токенов", "JWT")
+Rel(gateway, booking, "Создание/отмена заказов", "REST")
+Rel(gateway, driver_service, "Поиск водителей", "REST")
+Rel(gateway, pricing, "Расчет стоимости", "REST")
+Rel(gateway, payment, "Оплата поездок", "REST")
+Rel(gateway, analytics, "Отправка метрик", "REST")
+
+
+Rel(booking, pricing, "Запрос расчета цены", "REST")
+Rel(booking, dispatch, "Поиск доступных водителей", "REST")
+Rel(booking, trip, "Создание поездки", "REST")
+Rel(dispatch, driver_service, "Обновление статуса водителя", "REST")
+Rel(dispatch, geolocation, "Поиск ближайших водителей", "REST")
+Rel(pricing, routing, "Запрос данных о маршруте", "REST")
+
+
+Rel(booking, kafka, "Публикует: OrderCreated")
+Rel(driver_service, kafka, "Публикует: DriverLocationUpdated")
+Rel(payment, kafka, "Публикует: PaymentProcessed")
+
+Rel(kafka, trip, "Потребляет: OrderCreated")
+Rel(kafka, notification, "Потребляет: PaymentProcessed, DriverLocationUpdated")
+Rel(kafka, analytics, "Потребляет все события")
+Rel(kafka, fraud, "Потребляет все события")
+
+
+Rel(geolocation, yandex_maps, "Геокодирование/Поиск POI", "REST API")
+Rel(routing, yandex_maps, "Построение маршрутов", "REST API")
+Rel(payment, payment_gateways, "Проведение платежей", "REST API")
+Rel(payment, bank_apis, "Выплаты водителям", "REST API")
+Rel(push_gateway, push_services, "Отправка уведомлений", "REST API")
+
+
+Rel(booking, postgres, "Чтение/запись", "SQL")
+Rel(trip, postgres, "Чтение/запись", "SQL")
+Rel(driver_service, postgres, "Чтение/запись", "SQL")
+Rel(payment, postgres, "Чтение/запись", "SQL")
+
+Rel(geolocation, elastic, "Геопоиск водителей", "REST API")
+Rel(iam, redis, "Хранение сессий", "Redis Protocol")
+Rel(iam, postgres, "Выборка не кешируемых данных")
+Rel(analytics, clickhouse, "Аналитические запросы", "SQL")
+
+Rel(service_mesh, booking, "Сбор метрик, трассировка")
+Rel(service_mesh, pricing, "Сбор метрик, трассировка")
+Rel(service_mesh, driver_service, "Сбор метрик, трассировка")
+Rel(service_mesh, payment, "Сбор метрик, трассировка")
+
+@enduml

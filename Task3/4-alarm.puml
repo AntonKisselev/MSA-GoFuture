@@ -1,0 +1,57 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C4 Component: Глобальная архитектура GoFuture с механизмами failover
+
+Person(passenger, "Пассажир", "Заказывает такси через мобильное приложение")
+
+System_Boundary(dns_layer, "DNS-уровень") {
+    Container(dns_cdn, "DNS и CDN сервис", "Геомаршрутизация\nHealth checking")
+}
+
+System_Boundary(singapore_region, "Регион: Сингапур (Primary)") {
+    Container(gateway_sg, "API Gateway", "Python/FastAPI", "Единая точка входа")
+
+    Container(booking_sg, "Сервис бронирования", "Python/FastAPI", "Создание заказов")
+    Container(driver_sg, "Сервис водителей", "Python/FastAPI", "Управление водителями")
+    Container(pricing_sg, "Сервис ценообразования", "Python/FastAPI", "Динамическое ценообразование")
+
+    ContainerDb(postgres_sg, "PostgreSQL Primary", "Database", "Primary база данных\nActive-active")
+}
+
+System_Boundary(sydney_region, "Регион: Сидней (Hot Standby)") {
+    Container(gateway_syd, "API Gateway", "Python/FastAPI", "Резервный gateway")
+
+    Container(booking_syd, "Сервис бронирования", "Python/FastAPI", "Резервный сервис")
+    Container(driver_syd, "Сервис водителей", "Python/FastAPI", "Резервный сервис")
+
+    ContainerDb(postgres_syd, "PostgreSQL Replica", "Database", "Синхронная реплика\nHot standby")
+}
+
+System_Boundary(saopaulo_region, "Регион: Сан-Паулу (Regional)") {
+    Container(gateway_br, "API Gateway", "Python/FastAPI", "Локальный gateway")
+
+    Container(booking_br, "Сервис бронирования", "Python/FastAPI", "Локальный сервис")
+
+    ContainerDb(postgres_br, "PostgreSQL Replica", "Database", "Асинхронная реплика\nRead-only")
+}
+
+Rel(passenger, dns_layer, "HTTPS")
+
+' === Regional Routing ===
+Rel(dns_layer, gateway_sg, "Трафик из Азии", "HTTP")
+Rel(dns_layer, gateway_syd, "Failover трафик", "HTTP")
+Rel(dns_layer, gateway_br, "Трафик из Южной Америки", "HTTP")
+
+' === Database Replication ===
+Rel(postgres_sg, postgres_syd, "Синхронная репликация\n< 150ms", "WAL streaming")
+Rel(postgres_sg, postgres_br, "Асинхронная репликация\n< 300ms", "Logical replication")
+
+' === Failover Triggers ===
+Rel(dns_layer, postgres_sg, "Health check", "HTTP")
+Rel(dns_layer, postgres_syd, "Health check", "HTTP")
+
+Rel(gateway_sg, gateway_syd, "Health status", "API")
+Rel(gateway_syd, gateway_br, "Health status", "API")
+
+@enduml
