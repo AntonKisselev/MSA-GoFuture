@@ -1,0 +1,75 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C4 Component: Событийная платформа GoFuture
+
+System_Boundary(event_platform, "Событийная платформа") {
+
+    ContainerQueue(booking_events, "Топик: booking-events", "Kafka", "События бронирования\nПартиции: 20\nРепликация: 3")
+    ContainerQueue(driver_events, "Топик: driver-events", "Kafka", "События водителей\nПартиции: 30\nРепликация: 3")
+    ContainerQueue(payment_events, "Топик: payment-events", "Kafka", "События платежей\nПартиции: 15\nРепликация: 3")
+    ContainerQueue(pricing_events, "Топик: pricing-events", "Kafka", "События ценообразования\nПартиции: 10\nРепликация: 3")
+
+    ContainerQueue(dead_letter, "Топик: dead-letter-queue", "Kafka", "Необработанные события\nПартиции: 5\nРепликация: 3")
+
+    Container(stream_processor, "Обработчик потоков", "Apache Flink", "Реалтайм обработка событий\nStateful вычисления")
+    Container(pricing_engine, "Движок ценообразования", "Flink Job", "Динамическое ценообразование\nML-модели спроса")
+    Container(fraud_detector, "Детектор мошенничества", "Flink Job", "Реалтайм анализ фрода\nАномалии в поездках")
+    Container(analytics_processor, "Аналитический процессор", "Flink Job", "Агрегация метрик\nОбогащение данных")
+
+    Container(booking_saga, "Saga: Бронирование", "Python/FastAPI", "Orchestration Saga\nУправление жизненным циклом заказа")
+    Container(payment_saga, "Saga: Платежи", "Python/FastAPI", "Compensation Saga\nОбработка откатов платежей")
+
+}
+
+System(booking_service, "Сервис бронирования", "Python/FastAPI")
+System(driver_service, "Сервис водителей", "Python/FastAPI")
+System(payment_service, "Сервис платежей", "Python/FastAPI")
+System(pricing_service, "Сервис ценообразования", "Python/FastAPI")
+
+System(analytics_service, "Сервис аналитики", "Python/FastAPI")
+System(fraud_service, "Антифрод сервис", "Python/FastAPI")
+
+' === Мониторинг ===
+System(monitoring, "Стек мониторинга", "Prometheus/Grafana")
+System(alerting, "Система алертинга", "Alertmanager")
+System(tracing, "Распределенная трассировка", "Jaeger")
+
+' === Связи производителей ===
+Rel(booking_service, booking_events, "Публикует:\n• BookingCreated\n• BookingCancelled\n• BookingConfirmed")
+Rel(driver_service, driver_events, "Публикует:\n• DriverLocationUpdated\n• DriverStatusChanged\n• DriverAssigned")
+Rel(payment_service, payment_events, "Публикует:\n• PaymentAuthorized\n• PaymentCompleted\n• PaymentFailed")
+Rel(pricing_service, pricing_events, "Публикует:\n• PriceCalculated\n• SurgePriceUpdated")
+
+' === Обработка потоков ===
+Rel(booking_events, stream_processor, "Потребляет события")
+Rel(driver_events, stream_processor, "Потребляет события")
+Rel(payment_events, stream_processor, "Потребляет события")
+
+Rel(stream_processor, pricing_engine, "Направляет события ценообразования")
+Rel(stream_processor, fraud_detector, "Направляет подозрительные события")
+Rel(stream_processor, analytics_processor, "Направляет аналитические события")
+
+' === Saga Orchestration ===
+Rel(booking_saga, booking_service, "Команда: CreateBooking")
+Rel(booking_saga, driver_service, "Команда: FindDriver")
+Rel(booking_saga, pricing_service, "Команда: CalculatePrice")
+Rel(payment_saga, payment_service, "Команда: ProcessPayment")
+
+' === Потребители обработанных событий ===
+Rel(pricing_engine, pricing_service, "Обновленные цены", "REST")
+Rel(fraud_detector, fraud_service, "Алерты мошенничества", "REST")
+Rel(analytics_processor, analytics_service, "Агрегированные метрики", "REST")
+
+' === Dead Letter Queue ===
+Rel(stream_processor, dead_letter, "Необработанные события")
+Rel(booking_service, dead_letter, "Невалидные события")
+
+' === Мониторинг ===
+Rel(booking_events, monitoring, "Метрики топиков", "JMX")
+Rel(stream_processor, monitoring, "Метрики обработки", "Prometheus")
+Rel(stream_processor, tracing, "Трассировка событий", "OpenTracing")
+Rel(monitoring, alerting, "Алерты", "Webhook")
+
+
+@enduml

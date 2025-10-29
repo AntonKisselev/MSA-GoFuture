@@ -1,0 +1,75 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C4 Component: Мультитенантная платформа GoFuture
+
+Person(super_admin, "Супер-администратор", "Управляет всеми партнерами и платформой")
+Person(partner_admin, "Администратор партнера", "Управляет своим тенантом")
+Person(partner_user, "Пользователь партнера", "Работает в системе партнера")
+Person(end_customer, "Конечный клиент", "Заказывает услуги через партнера")
+
+System_Boundary(platform, "Мультитенантная платформа GoFuture") {
+
+    Container(tenant_manager, "Tenant Manager", "Python/FastAPI", "Управление тенантами\nOnboarding/Offboarding\nИзоляция данных")
+
+    Container(iam_service, "IAM Service", "Python/FastAPI", "Мультитенантная аутентификация\nRBAC + ABAC\nSAML/OIDC")
+
+    Container(tenant_router, "Tenant Router", "Python/FastAPI", "Маршрутизация по тенантам")
+
+
+    Container(booking_mt, "Booking Service\n(Multi-tenant)", "Python/FastAPI", "Бронирования с изоляцией\nTenant-aware бизнес-логика")
+
+    Container(driver_mt, "Driver Service\n(Multi-tenant)", "Python/FastAPI", "Управление водителями\nTenant-specific конфигурации")
+
+    Container(pricing_mt, "Pricing Service\n(Multi-tenant)", "Python/FastAPI", "Кастомизация ценообразования\nTenant-specific правила")
+
+
+    ContainerDb(tenant_config_db, "Tenant Config DB", "PostgreSQL", "Конфигурации тенантов\nИзоляционные политики\nЛимиты и квоты")
+
+    ContainerDb(shared_database, "Shared Database", "PostgreSQL", "Данные всех тенантов\nTenant_id в каждой таблице\nRow-level security")
+
+    ContainerDb(isolated_databases, "Isolated Databases", "PostgreSQL", "Данные премиум тенантов\nПолная изоляция БД\nОтдельные инстансы")
+
+}
+
+
+System(partner_system, "Система партнера", "Интеграция через API")
+System(sso_provider, "SSO провайдер", "Корпоративная аутентификация")
+
+System(onboarding_ui, "Onboarding Portal", "React/TypeScript", "Самостоятельная регистрация")
+System(admin_ui, "Admin Portal", "React/TypeScript", "Управление тенантами")
+
+System(monitoring_system, "Мониторинг", "Prometheus/Grafana", "Мультитенантные метрики")
+
+
+Rel(end_customer, iam_service, "Логин через партнера", "OIDC")
+Rel(partner_user, iam_service, "Логин через SSO", "SAML")
+Rel(partner_admin, iam_service, "Админ доступ", "JWT")
+Rel(super_admin, iam_service, "Супер-админ доступ", "JWT")
+
+Rel(sso_provider, iam_service, "Federation", "SAML 2.0")
+
+Rel(iam_service, tenant_router, "Tenant context", "JWT с tenant_id")
+Rel(tenant_router, booking_mt, "Запросы с tenant context", "gRPC")
+Rel(tenant_router, driver_mt, "Запросы с tenant context", "gRPC")
+Rel(tenant_router, pricing_mt, "Запросы с tenant context", "gRPC")
+
+
+Rel(booking_mt, shared_database, "Чтение/запись с tenant_id", "SQL + RLS")
+Rel(driver_mt, shared_database, "Чтение/запись с tenant_id", "SQL + RLS")
+Rel(pricing_mt, isolated_databases, "Доступ к изолированным БД", "SQL")
+
+Rel(tenant_manager, tenant_config_db, "Управление конфигурациями", "SQL")
+
+
+Rel(partner_system, onboarding_ui, "API интеграция", "REST")
+Rel(onboarding_ui, tenant_manager, "Создание тенанта", "REST")
+Rel(admin_ui, tenant_manager, "Управление тенантами", "REST")
+Rel(tenant_manager, iam_service, "Настройка доступа", "REST")
+
+' === Monitoring ===
+Rel(booking_mt, monitoring_system, "Метрики по тенантам", "Prometheus")
+Rel(tenant_manager, monitoring_system, "Метрики onboarding", "Prometheus")
+Rel(iam_service, monitoring_system, "Метрики аутентификации", "Prometheus")
+
+@enduml
